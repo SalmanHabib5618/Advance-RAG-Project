@@ -56,11 +56,194 @@ from langchain.chains import ConversationalRetrievalChain
 
 # ----------------------------- Page setup -----------------------------
 st.set_page_config(page_title="Advanced RAG App", page_icon="🧠", layout="wide")
-st.title("🧠 Advanced RAG — Hybrid Search + Re-ranking + Query Expansion")
-st.caption(
-    "Upload documents from different sources, then chat. Retrieval uses "
-    "hybrid search, query expansion, and cross-encoder re-ranking for "
-    "more accurate, grounded answers."
+
+# ----------------------------- Themes -----------------------------
+# Three distinct visual identities, not just recolors of the same layout:
+# Terminal leans into a console/log aesthetic (fitting for a retrieval
+# pipeline that's literally streaming steps), Archive borrows the quiet,
+# serif register of a research paper, and Dossier is a warm-on-navy
+# "signal found in the noise" identity.
+THEMES = {
+    "Terminal": {
+        "bg_gradient": "linear-gradient(180deg, #0B0F0E 0%, #0E1512 100%)",
+        "surface": "#111815",
+        "border": "#1F2B24",
+        "text": "#DCEDE2",
+        "text_muted": "#6F8A7A",
+        "accent": "#39D98A",
+        "accent_soft": "rgba(57, 217, 138, 0.12)",
+        "heading_font": "'IBM Plex Mono', 'Courier New', monospace",
+        "body_font": "'IBM Plex Mono', 'Courier New', monospace",
+        "radius": "6px",
+        "prompt": True,
+    },
+    "Archive": {
+        "bg_gradient": "linear-gradient(180deg, #F2F3F6 0%, #E7E9EE 100%)",
+        "surface": "#FFFFFF",
+        "border": "#D7DBE3",
+        "text": "#1B1F27",
+        "text_muted": "#5B6472",
+        "accent": "#0F766E",
+        "accent_soft": "rgba(15, 118, 110, 0.10)",
+        "heading_font": "'Source Serif 4', Georgia, serif",
+        "body_font": "'Source Serif 4', Georgia, serif",
+        "radius": "2px",
+        "prompt": False,
+    },
+    "Dossier": {
+        "bg_gradient": "linear-gradient(180deg, #10131C 0%, #161B27 100%)",
+        "surface": "#171C29",
+        "border": "#262D3E",
+        "text": "#EDEEF2",
+        "text_muted": "#8891A5",
+        "accent": "#E8A33D",
+        "accent_soft": "rgba(232, 163, 61, 0.12)",
+        "heading_font": "'Space Grotesk', 'Segoe UI', sans-serif",
+        "body_font": "'Inter', 'Segoe UI', sans-serif",
+        "radius": "10px",
+        "prompt": False,
+    },
+}
+
+
+def apply_theme(t):
+    prompt_css = ""
+    if t["prompt"]:
+        prompt_css = """
+        .rag-hero h1::before {
+            content: '> ';
+            color: var(--accent);
+        }
+        .rag-hero h1::after {
+            content: '_';
+            color: var(--accent);
+            animation: rag-blink 1.1s steps(1) infinite;
+        }
+        @keyframes rag-blink { 50% { opacity: 0; } }
+        """
+
+    st.markdown(f"""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:wght@400;600;700&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500&display=swap');
+
+    :root {{
+        --surface: {t['surface']};
+        --border: {t['border']};
+        --text: {t['text']};
+        --text-muted: {t['text_muted']};
+        --accent: {t['accent']};
+        --accent-soft: {t['accent_soft']};
+        --radius: {t['radius']};
+    }}
+
+    .stApp {{ background: {t['bg_gradient']}; }}
+
+    [data-testid="stAppViewContainer"], [data-testid="stAppViewContainer"] p,
+    [data-testid="stAppViewContainer"] label, [data-testid="stAppViewContainer"] span {{
+        color: var(--text);
+        font-family: {t['body_font']};
+    }}
+
+    [data-testid="stSidebar"] {{
+        background: var(--surface);
+        border-right: 1px solid var(--border);
+    }}
+    [data-testid="stSidebar"] * {{ color: var(--text) !important; }}
+
+    h1, h2, h3 {{
+        font-family: {t['heading_font']} !important;
+        color: var(--text) !important;
+    }}
+
+    .rag-hero {{
+        padding: 1.75rem 2rem;
+        margin-bottom: 1.5rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+    }}
+    .rag-hero h1 {{ margin: 0 0 0.6rem 0; font-size: 2.1rem; line-height: 1.15; }}
+    .rag-hero p {{ margin: 0 0 1rem 0; color: var(--text-muted); max-width: 62ch; }}
+    {prompt_css}
+
+    .rag-badges {{ display: flex; flex-wrap: wrap; gap: 0.5rem; }}
+    .rag-badge {{
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.75rem;
+        padding: 0.25rem 0.65rem;
+        border-radius: 999px;
+        border: 1px solid var(--accent);
+        color: var(--accent);
+        background: var(--accent-soft);
+    }}
+
+    .stButton > button {{
+        border-radius: var(--radius);
+        border: 1px solid var(--accent);
+        color: var(--accent);
+        background: transparent;
+        font-weight: 600;
+    }}
+    .stButton > button:hover {{
+        background: var(--accent-soft);
+        border-color: var(--accent);
+        color: var(--accent);
+    }}
+
+    [data-testid="stChatMessage"] {{
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 0.4rem 0.25rem;
+    }}
+
+    [data-testid="stAlert"] {{
+        border-radius: var(--radius);
+        border: 1px solid var(--accent);
+        background: var(--accent-soft) !important;
+    }}
+
+    [data-testid="stExpander"] {{
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+    }}
+
+    hr {{ border-color: var(--border); }}
+    </style>
+    """, unsafe_allow_html=True)
+
+
+# Fixed model — change here, not exposed in the UI.
+MODEL_NAME = "openai/gpt-oss-20b"
+RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+
+with st.sidebar:
+    st.markdown("##### 🎨 Theme")
+    theme_choice = st.selectbox(
+        "Theme", list(THEMES.keys()), label_visibility="collapsed"
+    )
+    st.divider()
+
+apply_theme(THEMES[theme_choice])
+
+st.markdown(
+    f"""
+    <div class="rag-hero">
+        <h1>Advanced RAG</h1>
+        <p>Upload documents from different sources, then chat. Retrieval combines
+        hybrid search, query expansion, and cross-encoder re-ranking so answers
+        stay grounded in your content.</p>
+        <div class="rag-badges">
+            <span class="rag-badge">LangChain</span>
+            <span class="rag-badge">FAISS</span>
+            <span class="rag-badge">BM25</span>
+            <span class="rag-badge">Cross-Encoder</span>
+            <span class="rag-badge">Groq · {MODEL_NAME}</span>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
 # ----------------------------- Session state -----------------------------
@@ -75,11 +258,6 @@ except Exception:
     GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 if GROQ_API_KEY:
     os.environ["GROQ_API_KEY"] = GROQ_API_KEY
-
-# Fixed model — change here, not exposed in the UI.
-MODEL_NAME = "openai/gpt-oss-20b"
-RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 
 # ----------------------------- Sidebar -----------------------------
